@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHC VALIDATION (Perbaikan Login)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style> 
+        body { font-family: 'Inter', sans-serif; } 
+        .table-container { overflow-x: auto; }
+        .menu-button { transition: all 0.2s ease-in-out; }
+        .menu-button:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+        button:disabled { background-color: #9ca3af; cursor: not-allowed; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div id="login-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm">
+            <h2 class="text-2xl font-bold mb-2 text-center text-gray-800">Aplikasi Laporan SHC</h2>
+            <p class="text-center text-gray-500 mb-6">Masukkan Password untuk Masuk</p>
+            <div class="mb-4">
+                <label for="password" class="block text-gray-700 text-sm font-bold mb-2">Password</label>
+                <input type="password" id="password" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700" required>
+            </div>
+            <p id="auth-error" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4 hidden"></p>
+            <button id="login-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Masuk</button>
+        </div>
+    </div>
+
+    <div id="main-container" class="hidden">
+        <div class="container mx-auto p-4 md:p-8">
+            <header class="text-center mb-6 relative">
+                <div>
+                    <h1 class="text-3xl md:text-4xl font-bold text-gray-900">SHC VALIDATION</h1>
+                    <p id="app-subtitle" class="text-md text-gray-600 mt-2">Mode Input Data</p>
+                </div>
+                <button id="logout-btn" class="absolute top-0 right-0 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded text-sm transition-colors">Log Out</button>
+            </header>
+            
+            <div id="home-view">
+                <div class="p-6 bg-white rounded-lg shadow-md">
+                    <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">Pilih Shift Kerja</h2>
+                    <div id="shift-selection-menu" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <button data-shift="1" class="menu-button bg-blue-600 text-white p-8 rounded-lg text-2xl font-bold shadow-lg">Shift 1</button>
+                        <button data-shift="2" class="menu-button bg-green-600 text-white p-8 rounded-lg text-2xl font-bold shadow-lg">Shift 2</button>
+                        <button data-shift="3" class="menu-button bg-purple-600 text-white p-8 rounded-lg text-2xl font-bold shadow-lg">Shift 3</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="shift-submenu-view" class="hidden">
+                <div class="p-6 bg-white rounded-lg shadow-md">
+                    <h2 id="submenu-title" class="text-3xl font-bold text-center text-gray-800 mb-8">Menu Shift</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <button id="goto-input-btn" class="menu-button bg-sky-500 text-white p-8 rounded-lg text-2xl font-bold shadow-lg">Input Laporan Baru</button>
+                        <button id="goto-report-center-btn" class="menu-button bg-amber-500 text-white p-8 rounded-lg text-2xl font-bold shadow-lg">Pusat Laporan</button>
+                    </div>
+                    <div class="mt-8 text-center">
+                        <button id="back-to-home-btn" class="bg-gray-600 text-white py-2 px-6 rounded-lg font-semibold">&larr; Kembali ke Beranda</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="report-center-view" class="hidden">
+                 <div class="p-6 bg-white rounded-lg shadow-md">
+                    <h2 id="report-center-title" class="text-2xl font-bold text-gray-800 mb-6 border-b pb-3">Pusat Laporan</h2>
+                    
+                    <div class="mb-6">
+                        <h3 class="text-lg font-semibold text-gray-700 mb-3">Laporan Harian</h3>
+                        <div class="flex flex-wrap items-center gap-4">
+                            <div>
+                                <label for="report-date" class="block text-sm font-medium text-gray-700 mb-1">Pilih Tanggal:</label>
+                                <input type="date" id="report-date" class="p-2 border rounded-md shadow-sm">
+                            </div>
+                            <div class="flex items-end gap-2">
+                                <button id="view-daily-report-btn" class="bg-indigo-600 text-white py-2 px-4 rounded-lg font-semibold shadow-sm">Tampilkan</button>
+                                <button id="export-daily-csv-btn" class="bg-green-600 text-white py-2 px-4 rounded-lg font-semibold shadow-sm">CSV</button>
+                                <button id="export-daily-pdf-btn" class="bg-red-600 text-white py-2 px-4 rounded-lg font-semibold shadow-sm">PDF</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-6">
+
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-700 mb-3">Laporan Bulanan</h3>
+                        <div class="flex flex-wrap items-center gap-4">
+                            <div>
+                                <label for="report-month" class="block text-sm font-medium text-gray-700 mb-1">Pilih Bulan:</label>
+                                <select id="report-month" class="p-2 border rounded-md shadow-sm"></select>
+                            </div>
+                            <div>
+                                <label for="report-year" class="block text-sm font-medium text-gray-700 mb-1">Tahun:</label>
+                                <input type="number" id="report-year" class="p-2 border rounded-md shadow-sm w-28">
+                            </div>
+                             <div class="flex items-end gap-2">
+                                <button id="view-monthly-report-btn" class="bg-indigo-600 text-white py-2 px-4 rounded-lg font-semibold shadow-sm">Tampilkan</button>
+                                <button id="export-monthly-csv-btn" class="bg-green-600 text-white py-2 px-4 rounded-lg font-semibold shadow-sm">CSV</button>
+                                <button id="export-monthly-pdf-btn" class="bg-red-600 text-white py-2 px-4 rounded-lg font-semibold shadow-sm">PDF</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-8 border-t pt-4">
+                         <button id="back-to-submenu-from-report-center-btn" class="bg-gray-600 text-white py-2 px-5 rounded-lg font-semibold">&larr; Kembali</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tables-view" class="hidden">
+                 <div id="view-mode-header" class="hidden items-center justify-between mb-4 p-4 bg-blue-100 border border-blue-300 rounded-lg">
+                    <h3 id="view-mode-title" class="text-xl font-bold text-blue-800">Melihat Laporan</h3>
+                    <button id="back-to-report-center-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">&larr; Kembali ke Pusat Laporan</button>
+                </div>
+
+                <div class="space-y-10">
+                    <div id="before-cleaning-section"><h3 class="text-2xl font-bold mb-4 text-gray-800 border-b-2 border-blue-500 pb-2">Filter SHC - Sebelum Pembersihan</h3><div class="bg-white rounded-lg shadow-lg table-container"><table class="w-full min-w-[900px]"><thead class="text-xs text-gray-700 uppercase bg-gray-100"><tr><th class="px-4 py-3">Plot</th><th class="px-4 py-3">SHC</th><th class="px-4 py-3">Valve</th><th class="px-4 py-3">Inlet (bar)</th><th class="px-4 py-3">Outlet (bar)</th><th class="px-4 py-3">Variance</th><th class="px-4 py-3">Needle Point</th></tr></thead><tbody id="before-cleaning-tbody"></tbody></table></div></div>
+                    <div id="after-cleaning-section"><h3 class="text-2xl font-bold mb-4 text-gray-800 border-b-2 border-green-500 pb-2">Filter SHC - Setelah Pembersihan</h3><div class="bg-white rounded-lg shadow-lg table-container"><table class="w-full min-w-[900px]"><thead class="text-xs text-gray-700 uppercase bg-gray-100"><tr><th class="px-4 py-3">Plot</th><th class="px-4 py-3">SHC</th><th class="px-4 py-3">Valve</th><th class="px-4 py-3">Inlet (bar)</th><th class="px-4 py-3">Outlet (bar)</th><th class="px-4 py-3">Variance</th><th class="px-4 py-3">Needle Point</th></tr></thead><tbody id="after-cleaning-tbody"></tbody></table></div></div>
+                </div>
+
+                 <div class="mt-10 flex justify-center items-center gap-4">
+                    <button id="save-btn" class="bg-blue-600 text-white py-3 px-8 rounded-lg font-bold shadow-lg">Simpan Data</button>
+                    <button id="back-to-submenu-btn" class="bg-gray-600 text-white py-3 px-8 rounded-lg font-bold shadow-lg">&larr; Kembali</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    // === KONFIGURASI PENTING - SUDAH DIISI SESUAI DATA ANDA ===
+    const SUPABASE_URL = 'https://mlfmaapktpzrrvdatwxq.supabase.co'; 
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1sZm1hYXBrdHB6cnJ2ZGF0d3hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExMzM3NjgsImV4cCI6MjA2NjcwOTc2OH0.AqUx7kTTprWay6Gkry1R6u13lcqRkBOYflw2VVeRaYw';
+    const LOGIN_EMAIL = 'admin@shc.com';
+
+    const { createClient } = supabase;
+    const _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { jsPDF } = window.jspdf;
+    
+    // --- DATA & STATE ---
+    const shiftsData = {1:[{plot:"D18",shc:"1",valve:"2"},{plot:"D19",shc:"02",valve:"4"},{plot:"D20",shc:"03",valve:"6"},{plot:"D21",shc:"04",valve:"7"},{plot:"D22",shc:"05",valve:"9"},{plot:"D24",shc:"07",valve:"13"},{plot:"E17",shc:"9",valve:"17"},{plot:"E20",shc:"12",valve:"24"},{plot:"E22",shc:"14",valve:"27"},{plot:"E23",shc:"15",valve:"30"},{plot:"E25",shc:"17",valve:"33"},{plot:"E26",shc:"18",valve:"36"}],2:[{plot:"D18",shc:"01",valve:"1"},{plot:"D23",shc:"06",valve:"11"},{plot:"D20",shc:"03",valve:"5"},{plot:"E17",shc:"9",valve:"18"},{plot:"E21",shc:"13",valve:"25"},{plot:"E25",shc:"17",valve:"34"},{plot:"E24",shc:"16",valve:"31"},{plot:"E22",shc:"13",valve:"26"},{plot:"D25",shc:"08",valve:"15"},{plot:"E27",shc:"19",valve:"37"}],3:[{plot:"D19",shc:"02",valve:"3"},{plot:"D21",shc:"04",valve:"8"},{plot:"D23",shc:"06",valve:"12"},{plot:"D24",shc:"07",valve:"14"},{plot:"D25",shc:"08",valve:"16"},{plot:"E20",shc:"12",valve:"23"},{plot:"E21",shc:"13",valve:"26"},{plot:"E23",shc:"15",valve:"29"},{plot:"E24",shc:"16",valve:"32"},{plot:"E26",shc:"18",valve:"35"},{plot:"E27",shc:"19",valve:"38"}]};
+    let currentShift = 1;
+    let currentUser = null;
+    
+    // --- DOM ELEMENTS ---
+    const loginOverlay = document.getElementById('login-overlay');
+    const mainContainer = document.getElementById('main-container');
+    const authErrorEl = document.getElementById('auth-error');
+    const homeView = document.getElementById('home-view');
+    const shiftSubmenuView = document.getElementById('shift-submenu-view');
+    const dataEntryView = document.getElementById('tables-view');
+    const reportCenterView = document.getElementById('report-center-view');
+    const submenuTitle = document.getElementById('submenu-title');
+    const reportCenterTitle = document.getElementById('report-center-title');
+    const beforeTbody = document.getElementById('before-cleaning-tbody');
+    const afterTbody = document.getElementById('after-cleaning-tbody');
+    const viewModeHeader = document.getElementById('view-mode-header');
+    const viewModeTitle = document.getElementById('view-mode-title');
+    
+    // --- Fungsi Navigasi Tampilan ---
+    function showView(viewToShow) {
+        [homeView, shiftSubmenuView, dataEntryView, reportCenterView].forEach(view => view.classList.add('hidden'));
+        viewToShow.classList.remove('hidden');
+    }
+
+    // --- Inisialisasi Pilihan Bulan dan Tahun ---
+    function initDatePickers() {
+        const monthSelect = document.getElementById('report-month');
+        const yearInput = document.getElementById('report-year');
+        const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+        const currentYear = new Date().getFullYear();
+        const currentMonth = new Date().getMonth();
+
+        monthSelect.innerHTML = '';
+        months.forEach((month, index) => {
+            const option = document.createElement('option');
+            option.value = index + 1;
+            option.textContent = month;
+            monthSelect.appendChild(option);
+        });
+        
+        monthSelect.value = currentMonth + 1;
+        yearInput.value = currentYear;
+        document.getElementById('report-date').value = new Date().toISOString().slice(0, 10);
+    }
+    
+    // --- FUNGSI APLIKASI UTAMA ---
+    function initializeApp(user) {
+        currentUser = user;
+        loginOverlay.classList.add('hidden');
+        mainContainer.classList.remove('hidden');
+        document.getElementById('app-subtitle').textContent = `Login sebagai: ${user.email}`;
+        initDatePickers();
+        showView(homeView);
+    };
+    
+    function renderInputTables(shiftNumber) {
+        showView(dataEntryView);
+        currentShift = shiftNumber;
+        viewModeHeader.classList.add('hidden');
+        document.getElementById('save-btn').style.display = 'inline-flex';
+        
+        beforeTbody.innerHTML = '';
+        afterTbody.innerHTML = '';
+        const locations = shiftsData[shiftNumber] || [];
+        locations.forEach(loc => {
+            beforeTbody.appendChild(createTableRow(loc, 'before'));
+            afterTbody.appendChild(createTableRow(loc, 'after'));
+        });
+    };
+
+    function createTableRow(loc, type, data = {}, isReadOnly = false) {
+        const row = document.createElement('tr'); row.className = 'bg-white border-b'; row.dataset.key = `${loc.plot}-${loc.shc}-${loc.valve}-${type}`;
+        const readOnlyAttr = isReadOnly ? 'readonly class="bg-gray-100"' : '';
+        row.innerHTML = `<td class="px-4 py-2 font-medium text-gray-900">${loc.plot}</td><td class="px-4 py-2">${loc.shc}</td><td class="px-4 py-2">${loc.valve}</td><td class="px-4 py-2"><input type="number" step="any" data-field="inlet" ${readOnlyAttr} value="${data.inlet||""}" class="w-24 p-1 border rounded"></td><td class="px-4 py-2"><input type="number" step="any" data-field="outlet" ${readOnlyAttr} value="${data.outlet||""}" class="w-24 p-1 border rounded"></td><td class="px-4 py-2"><input type="text" data-field="variance" readonly value="${data.variance||""}" class="w-24 p-1 border rounded bg-gray-200"></td><td class="px-4 py-2"><input type="number" step="any" data-field="needle" ${readOnlyAttr} value="${data.needle||""}" class="w-24 p-1 border rounded"></td>`;
+        return row;
+    };
+
+    function calculateVariance(row) { const inlet = parseFloat(row.querySelector('[data-field="inlet"]').value) || 0; const outlet = parseFloat(row.querySelector('[data-field="outlet"]').value) || 0; const varianceInput = row.querySelector('[data-field="variance"]'); varianceInput.value = (inlet > 0 || outlet > 0) ? (inlet - outlet).toFixed(2) : ''; };
+
+    async function handleSaveData() {
+        if (!currentUser) return alert('Sesi tidak valid, silakan login ulang.');
+        const reportsToSave = [];
+        document.querySelectorAll('#before-cleaning-tbody tr, #after-cleaning-tbody tr').forEach(row => {
+            const inletValue = row.querySelector('[data-field="inlet"]').value;
+            const outletValue = row.querySelector('[data-field="outlet"]').value;
+            if (!inletValue && !outletValue) return;
+            const [plot, shc, valve, type] = row.dataset.key.split('-');
+            const inlet = inletValue ? parseFloat(inletValue) : null;
+            const outlet = outletValue ? parseFloat(outletValue) : null;
+            const variance = row.querySelector('[data-field="variance"]').value ? parseFloat(row.querySelector('[data-field="variance"]').value) : null;
+            const needle = row.querySelector('[data-field="needle"]').value ? parseFloat(row.querySelector('[data-field="needle"]').value) : null;
+            reportsToSave.push({ report_date: new Date().toISOString().slice(0, 10), shift: currentShift, plot, shc, valve, type, inlet, outlet, variance, needle, report_user_email: currentUser.email, user_id: currentUser.id });
+        });
+        if (reportsToSave.length === 0) return alert('Tidak ada data untuk disimpan.');
+        const { error } = await _supabase.from('reports').insert(reportsToSave);
+        if (error) { console.error('Error saving data:', error); alert(`Gagal menyimpan data: ${error.message}`); } 
+        else { alert('Data berhasil disimpan ke server!'); renderInputTables(currentShift); }
+    };
+    
+    async function fetchReports(options = {}) {
+        const { shift, date, month, year } = options;
+        let query = _supabase.from('reports').select().eq('shift', shift);
+
+        if (date) {
+            query = query.eq('report_date', date);
+        } else if (month && year) {
+            const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+            const lastDay = new Date(year, month, 0).getDate();
+            const endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
+            query = query.gte('report_date', startDate).lte('report_date', endDate);
+        }
+        
+        const { data, error } = await query;
+        if (error) {
+            console.error('Error fetching reports:', error);
+            alert(`Gagal mengambil data: ${error.message}`);
+            return null;
+        }
+        return data;
+    }
+
+    async function displayReportData(data, title) {
+        if (!data || data.length === 0) {
+            return alert(`Tidak ada laporan ditemukan untuk kriteria ini.`);
+        }
+        showView(dataEntryView);
+        document.getElementById('view-mode-title').textContent = title;
+        document.getElementById('view-mode-header').classList.remove('hidden');
+        document.getElementById('save-btn').style.display = 'none';
+        beforeTbody.innerHTML = ''; afterTbody.innerHTML = '';
+        data.sort((a,b) => a.report_date.localeCompare(b.report_date)).forEach(report => {
+            const loc = { plot: report.plot, shc: report.shc, valve: report.valve };
+            const row = createTableRow(loc, report.type, report, true);
+            if (report.type === 'before') beforeTbody.appendChild(row);
+            else afterTbody.appendChild(row);
+        });
+    }
+
+    async function handleExport(format, period) {
+        let options = { shift: currentShift };
+        let periodName = '';
+        let date_str = '';
+
+        if (period === 'daily') {
+            options.date = document.getElementById('report-date').value;
+            if (!options.date) return alert('Silakan pilih tanggal terlebih dahulu.');
+            date_str = options.date;
+            periodName = 'Harian';
+        } else if (period === 'monthly') {
+            options.month = document.getElementById('report-month').value;
+            options.year = document.getElementById('report-year').value;
+            if (!options.month || !options.year) return alert('Silakan pilih bulan dan tahun.');
+            const monthName = document.getElementById('report-month').options[document.getElementById('report-month').selectedIndex].text;
+            date_str = `${monthName}-${options.year}`;
+            periodName = 'Bulanan';
+        }
+
+        const reportsToExport = await fetchReports(options);
+        if (!reportsToExport || reportsToExport.length === 0) return alert('Tidak ada data untuk diekspor pada periode ini.');
+        
+        const headers = ["Tanggal", "Shift", "Plot", "SHC", "Valve", "Tipe", "Inlet", "Outlet", "Variance", "Needle"];
+        const body = reportsToExport.map(r => [r.report_date, r.shift, r.plot, r.shc, r.valve, r.type, r.inlet, r.outlet, r.variance, r.needle]);
+        const fileName = `laporan_${periodName.toLowerCase()}_shift${currentShift}_${date_str}.${format.toLowerCase()}`;
+
+        if (format === 'CSV') {
+            let csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\r\n";
+            body.forEach(rowArray => { csvContent += rowArray.join(",") + "\r\n"; });
+            const link = document.createElement("a");
+            link.setAttribute("href", encodeURI(csvContent));
+            link.setAttribute("download", fileName);
+            link.click();
+        } else if (format === 'PDF') {
+            const doc = new jsPDF();
+            doc.text(`Laporan ${periodName} - Shift ${currentShift} - ${date_str}`, 14, 15);
+            doc.autoTable({ head: [headers], body: body, startY: 20 });
+            doc.save(fileName);
+        }
+    }
+    
+    // --- FUNGSI OTENTIKASI ---
+    async function handleLogin() {
+        const password = document.getElementById('password').value;
+        authErrorEl.textContent = ''; authErrorEl.classList.add('hidden');
+        try {
+            const { data, error } = await _supabase.auth.signInWithPassword({ email: LOGIN_EMAIL, password: password });
+            if (error) throw error; 
+            initializeApp(data.user);
+        } catch (error) {
+            console.error('Login Error:', error);
+            authErrorEl.textContent = `Password Salah: ${error.message}`;
+            authErrorEl.classList.remove('hidden');
+        }
+    };
+    async function handleLogout() {
+        const { error } = await _supabase.auth.signOut();
+        if (error) { console.error('Logout Error:', error); } 
+        else { location.reload(); }
+    };
+
+    // --- EVENT LISTENERS ---
+    document.getElementById('login-btn').addEventListener('click', handleLogin);
+    document.getElementById('password').addEventListener('keypress', function (e) { if (e.key === 'Enter') handleLogin(); });
+    document.getElementById('logout-btn').addEventListener('click', handleLogout);
+    
+    document.getElementById('shift-selection-menu').addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON') {
+            currentShift = parseInt(e.target.dataset.shift);
+            document.getElementById('submenu-title').textContent = `Menu Shift ${currentShift}`;
+            showView(shiftSubmenuView);
+        }
+    });
+    
+    document.getElementById('goto-input-btn').addEventListener('click', () => renderInputTables(currentShift));
+    document.getElementById('goto-report-center-btn').addEventListener('click', () => {
+        document.getElementById('report-center-title').textContent = `Pusat Laporan untuk Shift ${currentShift}`;
+        showView(reportCenterView);
+    });
+    document.getElementById('back-to-home-btn').addEventListener('click', () => showView(homeView));
+    document.getElementById('back-to-submenu-from-report-center-btn').addEventListener('click', () => showView(shiftSubmenuView));
+    
+    document.getElementById('view-daily-report-btn').addEventListener('click', async () => {
+        const date = document.getElementById('report-date').value;
+        if(!date) return alert('Pilih tanggal');
+        const data = await fetchReports({shift: currentShift, date: date});
+        displayReportData(data, `Laporan Harian Shift ${currentShift} - ${date}`);
+    });
+    document.getElementById('view-monthly-report-btn').addEventListener('click', async () => {
+        const month = document.getElementById('report-month').value;
+        const year = document.getElementById('report-year').value;
+        if(!month || !year) return alert('Pilih bulan dan tahun');
+        const data = await fetchReports({shift: currentShift, month: month, year: year});
+        const monthName = document.getElementById('report-month').options[document.getElementById('report-month').selectedIndex].text;
+        displayReportData(data, `Laporan Bulanan Shift ${currentShift} - ${monthName} ${year}`);
+    });
+
+    document.getElementById('export-daily-csv-btn').addEventListener('click', () => handleExport('CSV', 'daily'));
+    document.getElementById('export-daily-pdf-btn').addEventListener('click', () => handleExport('PDF', 'daily'));
+    document.getElementById('export-monthly-csv-btn').addEventListener('click', () => handleExport('CSV', 'monthly'));
+    document.getElementById('export-monthly-pdf-btn').addEventListener('click', () => handleExport('PDF', 'monthly'));
+
+    document.getElementById('back-to-report-center-btn').addEventListener('click', () => showView(reportCenterView));
+    document.getElementById('back-to-submenu-btn').addEventListener('click', () => showView(shiftSubmenuView));
+    document.getElementById('save-btn').addEventListener('click', handleSaveData);
+    mainContainer.addEventListener('input', (e) => { if (e.target.matches('[data-field="inlet"], [data-field="outlet"]')) { calculateVariance(e.target.closest('tr')); } });
+
+    // --- Inisialisasi Aplikasi ---
+    (async () => {
+        const { data: { session } } = await _supabase.auth.getSession();
+        if (session) {
+            initializeApp(session.user);
+        } else {
+            loginOverlay.classList.remove('hidden');
+        }
+    })();
+});
+</script>
+</body>
+</html>
